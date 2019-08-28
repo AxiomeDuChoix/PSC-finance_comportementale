@@ -1,0 +1,7 @@
+Pour décider si l'on est en version ENSAE ou en version local, merci de modifier Experiences/versionENSAE et de mettre 1 si version Ensae, 0 sinon.
+De même pour afficher les corrélations entre gamma et le score des utilisateurs.
+
+AVANT DE LANCER TOUTE EXPERIENCE : le professeur devra effacer la base de données (à la main pour l'instant). Puis lancer l'interface prof et décider du nombre d'élèves et des gammas.
+Les expériences se mettent dans le dossier Experiences numérotées de 1 à nombreExpériences. A FAIRE : créer un programme de création d'expérience !!
+
+REMARQUE : pour créer une database chez vous, suivez les informations de DB PSC :  linux only.

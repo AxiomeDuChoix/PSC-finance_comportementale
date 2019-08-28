@@ -1,0 +1,331 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Oct 29 14:48:41 2018
+
+@author: cellule foot
+"""
+
+import numpy as np
+from PyQt5 import QtWidgets,QtCore
+from PyQt5.QtCore import pyqtSignal
+from functools import partial
+import Interface.gui_portefeuille as gui
+import Interface.optimalPortfolio as calc
+import pyqtgraph
+import pickle as pi
+
+file=open("../Experiences/correlationsProf")
+tab=file.read().split()x
+file.close()
+correlations=int(tab[0]) #Pour activer l'affichage du score en fonction de gamma
+
+if(correlations):
+    import Classement.guiClassement as cl
+else:
+    import Classement.guiClassement2 as cl
+
+file=open("../Experiences/versionENSAE")
+tab=file.read().split()
+file.close()
+versionENSAE=int(tab[0]) #Pour activer la version ENSAE ou la version locale
+
+
+nbEssais=6
+couleurGammaFaible=(255,0,0)
+couleurGammaFort=(0,0,255)
+
+
+class Parametres:
+    def __init__(self,nomsActions,sigma,mu,nbPer,prixInitial,Rf,VAD_autorisee,riskless_autorise,returnsGeneres,aversion_au_risque,returns=[],numeroExperience=0,exemple=False,numPoste=0,login=""):
+        self.nomsActions=nomsActions
+        self.nbActions=len(nomsActions)
+        self.sigma=sigma
+        self.mu=mu
+        self.aversion_au_risque=aversion_au_risque
+        self.nbPer=nbPer
+        self.prixInitial=prixInitial
+        self.Rf=Rf
+        self.VAD_autorisee=VAD_autorisee
+        self.returnsGeneres=returnsGeneres
+        self.riskless_autorise=riskless_autorise
+        self.returns=returns
+        self.numeroExperience=numeroExperience
+        self.exemple=exemple
+        self.numPoste=numPoste
+        self.login=login
+
+def paramPickle(numeroExperience,login,numPoste):
+        pkl_file = open('../Experiences/'+str(numeroExperience)+'.pkl', 'rb')
+        data = pi.load(pkl_file)
+        nomsActions=data['nomsActions']
+        sigma=data['sigma']
+        mu=data['mu']
+        nbPer=data['nbPer']
+        prixInitial=data['prixInitial']
+        Rf=data['Rf']
+        VAD_autorisee=data['VAD_autorisee']
+        riskless_autorise=data['riskless_autorise']
+        returnsGeneres=data['returnsGeneres']
+        output = open('../Experiences/gammas.pkl', 'rb')
+        gammas=pi.load(output)
+        tab=gammas['gammas']
+        aversion_au_risque=tab[(numPoste-1)%len(tab)]
+        output.close()
+        returns=data['returns']
+        exemples=open("../Experiences/numExemples")
+        tab=exemples.read().split()
+        numExemples=[int(i) for i in tab]
+        exemples.close()
+        if numeroExperience in numExemples:
+            exemple=True
+        else:
+            exemple=False
+        if riskless_autorise:
+            nomsActions.pop()
+        return Parametres(nomsActions,sigma,mu,nbPer,prixInitial,Rf,VAD_autorisee,riskless_autorise,returnsGeneres,aversion_au_risque,returns,numeroExperience,exemple,numPoste,login)
+
+
+class MyWindow(QtWidgets.QMainWindow):
+    closed=pyqtSignal(Parametres,name="closed")
+    def __init__(self,Parametres,tabgammas, parent=None):
+        # Préliminaires:
+        self.gammas = tabgammas
+        self.gammas.sort()
+        self.gammas_reduit = [self.gammas[0]]
+        self.nombre_clusters = 1
+        for i in range(len(self.gammas)):
+            if (self.gammas[i]>self.gammas_reduit[self.nombre_clusters-1]):
+                self.gammas_reduit.append(self.gammas[i])
+                self.nombre_clusters+=1
+                
+        self.nuage=[]
+        self.Parametres=Parametres
+        QtWidgets.QMainWindow.__init__(self, parent)
+        self.ui = gui.Ui_MainWindow()
+        self.ui.setupUi(self,self.Parametres,self.gammas_reduit)
+        if self.Parametres.riskless_autorise:
+            self.Parametres.nbActions+=1
+            self.Parametres.nomsActions.append("Actif sans risque")
+            self.droiteUser=self.ui.graphicsView_frontiere.plot([0],[0])
+            self.pointPortefeuilleSansRisque=self.ui.graphicsView_frontiere.plot([0],[0])
+        self.poids=[0]*self.Parametres.nbActions
+        self.pointPortefeuille=self.ui.graphicsView_frontiere.plot([0],[0],symbol = 'o')
+        
+        # On affiche un texte en bas de la fenêtre (status bar). Provisoirement c'est le nom de PSC.
+        
+        self.ui.statusBar.showMessage("PSC Finance Expérimentale")
+    
+        
+        # A FAIRE: rajouter une liste des actifs telle qu'un clic sur le nom d'un actif ouvre une fenêtre écrivant
+        # l'actualité sur l'entreprise correspondante.
+        
+        
+        # Vraie Enveloppe:
+        if self.Parametres.returnsGeneres:
+            returns=self.Parametres.returns
+        else:
+            returns = np.transpose(np.random.multivariate_normal(self.Parametres.mu, self.Parametres.sigma, self.Parametres.nbPer))
+        self.Parametres.mu,self.Parametres.sigma=calc.moments(returns)
+        self.Parametres.returns=returns
+            
+        Std, E, xMin, xMax, yMin, yMax = calc.frontiere(returns,self.Parametres.riskless_autorise,self.Parametres.VAD_autorisee,self.Parametres.Rf)
+        
+        if self.Parametres.riskless_autorise:
+#            xtg=np.dot(np.linalg.inv(self.Parametres.sigma),self.Parametres.mu)
+#            xtg=xtg/sum(xtg)
+#            s=np.sqrt(np.vdot(xtg,np.dot(self.Parametres.sigma,xtg)))
+            s,x=[0,1e6*Std[1]],[E[0],E[1]+1e6*(E[1]-E[0])]
+            self.gammas_droite=[]
+            for i in range(len(self.gammas_reduit)):
+                self.gammas_droite.append((E[1]-E[0])/(2*self.gammas_reduit[i]*E[1]))
+            Std=Std[2:]
+            E=E[2:]
+            self.ui.graphicsView_frontiere.plot(s,x)
+            
+        else:
+            self.gammas_droite=[]
+            for i in range(len(self.gammas_reduit)):
+                risqueUtilisateur,eUtilisateur=calc.calculGamma(Std,E,self.gammas_reduit[i])
+                self.gammas_droite.append(risqueUtilisateur)
+        
+        self.droites=[]
+        self.showDroites=True
+        for i in range(len(self.gammas_reduit)):
+            brush=[(couleurGammaFaible[j]*(self.nombre_clusters-1-i)+couleurGammaFort[j]*i)/(self.nombre_clusters-1) for j in range(3)]
+            self.droites.append(self.ui.graphicsView_frontiere.plot([self.gammas_droite[i],self.gammas_droite[i]],[-1000,1000],pen=pyqtgraph.mkPen(color=brush, width=2, style=QtCore.Qt.DashLine)))
+        longMu=len(self.Parametres.mu)
+        l=pyqtgraph.LegendItem()
+        l.setParentItem(self.ui.graphicsView_frontiere.graphicsItem())
+        for i in range(longMu):
+            vec=[1*(j==i) for j in range(longMu)]
+            y = np.dot(self.Parametres.mu,vec)
+            x = np.sqrt(np.dot(vec,np.dot(self.Parametres.sigma,vec)))
+<<<<<<< HEAD
+            point=self.ui.graphicsView_frontiere.plot([x],[y],symbol='star',symbolBrush=(i,longMu),symbolSize=16,pen=None)
+            l.addItem(point,"Entreprise "+str(i+1))
+        self.ui.graphicsView_frontiere.setLimits(xMin=0,xMax=max(xMax,risqueUtilisateur),yMin=yMin,yMax=max(yMax,eUtilisateur))
+=======
+            self.ui.graphicsView_frontiere.plot([x],[y],symbol='star',symbolBrush=(i, longMu),symbolSize=16)
+        self.ui.graphicsView_frontiere.setLimits(xMin=0,xMax=xMax,yMin=yMin,yMax=yMax)
+>>>>>>> a52803685c1929877a1f27bab2021c25d937060b
+        self.ui.graphicsView_frontiere.plot(Std,E)
+        self.ui.graphicsView_frontiere.setLabel('left',"Retour sur l'investissement (espérance)")
+        self.ui.graphicsView_frontiere.setLabel('bottom',"Risque (écart-type) en pourcent du retour sur l'investissement")   
+        
+        
+        self.actualise()
+        # On fait de même avec le bouton "retour", mais on le cache
+        if not(self.Parametres.exemple):
+            self.compteur=nbEssais-1
+        self.ui.retourBouton.clicked.connect(self.action_boutonRetour)
+        self.ui.suivantBouton.clicked.connect(self.action_boutonSuivant)
+        self.ui.classementBouton.clicked.connect(self.action_boutonClassement)
+        self.ui.rafraichirBouton.clicked.connect(self.actualise)
+#        self.ui.exporterBouton.clicked.connect(self.action_boutonExporter)
+        # On affiche les cours des actions:
+        
+        plt=self.ui.graphicsView_n_graphiques
+        plt.addLegend()
+        plt.setTitle("Cours des actions")
+        plt.setLabel('left',"Valeur des actions (en euros)")
+        plt.setLabel('bottom',"temps")
+#        plt.setMouseEnabled(False,False)
+        if self.Parametres.riskless_autorise:
+            tab=np.concatenate((returns,np.array([[self.Parametres.Rf for i in range(self.Parametres.nbPer)]])))
+            N=calc.convertirReturnsEnCours(tab,np.concatenate((self.Parametres.prixInitial,np.array([self.Parametres.prixInitial[0]]))))
+            
+        else:
+            N=calc.convertirReturnsEnCours(returns,self.Parametres.prixInitial) 
+        line=np.linspace(0,self.Parametres.nbPer,self.Parametres.nbPer)
+        self.graphs=[]
+        for i in range(self.Parametres.nbActions):
+            self.graphs.append(self.ui.graphicsView_n_graphiques.plot(line,N[i],pen=(i,self.Parametres.nbActions),name=self.Parametres.nomsActions[i])) 
+        for i in range(self.nombre_clusters):
+            self.ui.checkBoxesD[i].stateChanged.connect(partial(self.eteindre_graph,i))
+        self.ui.objectifs.stateChanged.connect(self.action_objectifs)
+        self.showCourbes=True
+        self.ui.hideCourbes.clicked.connect(self.actionHideCourbes)
+        
+        
+        
+    def actionHideCourbes(self):
+        if self.showCourbes:
+            self.showCourbes=False
+            for i in range(len(self.nuage)):
+                self.nuage[i].hide()
+                self.ui.checkBoxesD[i].setChecked(False)
+        else:
+            self.showCourbes=True
+            for i in range(len(self.nuage)):
+                self.nuage[i].show()
+                self.ui.checkBoxesD[i].setChecked(True)
+    def action_objectifs(self):
+        if self.ui.objectifs.isChecked():
+            for i in range(len(self.gammas_reduit)):
+                if self.ui.checkBoxesD[i].isChecked():
+                    self.droites[i].show()
+        else:
+            for i in range(len(self.gammas_reduit)):
+                self.droites[i].hide()
+            
+    def action_boutonClassement(self):
+        self.classement=cl.classementWindow(self.Parametres.numeroExperience)
+        self.classement.show()
+## Méthodes relatives à l'onglet 1         
+            
+    # Méthode pour cacher un graphique
+    
+    def eteindre_graph(self,i):
+        if self.ui.checkBoxesD[i].isChecked():
+            self.nuage[i].show()
+            if self.ui.objectifs.isChecked():
+                self.droites[i].show()
+        else:
+            self.nuage[i].hide()
+            if self.ui.objectifs.isChecked():
+                self.droites[i].hide()
+
+    ## Méthode pour actualiser les nuages de points
+    def actualise(self):
+        if versionENSAE:
+            import mysql.connector
+            mydb= mysql.connector.connect(
+                host="localhost",
+                user="root",
+                passwd="Hgb3des2",
+                database="marko")
+        else:
+            import MySQLdb
+            mydb= MySQLdb.connect(
+                host="localhost",
+                user="root",
+                passwd='hgb3des2',
+                db="PSC_DONNEES")
+        cursor=mydb.cursor()
+        Mu, Sigma = self.Parametres.mu,self.Parametres.sigma
+        gammas =self.gammas_reduit
+        for i in range(len(self.nuage)):
+            self.ui.graphicsView_frontiere.removeItem(self.nuage[i])
+        self.nuage = []
+#colors = ["black","olivedrab","deepskyblue","navy","salmon","orangered","orchid","dimgray","crimson","floralwhite"]
+        for i in range(self.nombre_clusters) :
+            recu="SELECT * FROM data WHERE ABS(ROUND(gamma,2)-%(gamma)s)<0.001 AND numCourbe = %(n)s"
+            cursor.execute(recu,{'gamma':gammas[i],'n':self.Parametres.numeroExperience})
+            myresult = cursor.fetchall()
+            ## Ici on les points rentrés par les utilisateurs ayant un gamma particulier.
+            ## Il s'agit désormais de représenter la courbe en question:
+            abscisses = []
+            ordonnees = []
+            for ligne in myresult:
+                nombre_actifs=self.Parametres.nbActions
+                if (self.Parametres.riskless_autorise):
+                    vec = np.array([float(ligne[j])/100 for j in range(6,6+nombre_actifs-1)])
+                    y = np.dot(Mu,vec)+float(ligne[5])*self.Parametres.Rf/100
+                    x = np.sqrt(np.dot(vec,np.dot(Sigma,vec)))
+                    abscisses.append(x)
+                    ordonnees.append(y)
+                else:
+                    vec = np.array([float(ligne[j])/100 for j in range(6,6+nombre_actifs)])
+                    y = np.dot(Mu,vec)
+                    x = np.sqrt(np.dot(vec,np.dot(Sigma,vec)))
+                    abscisses.append(x)
+                    ordonnees.append(y)
+            brush=[(couleurGammaFaible[j]*(self.nombre_clusters-1-i)+couleurGammaFort[j]*i)/(self.nombre_clusters-1) for j in range(3)]
+            print(brush)
+            self.nuage.append(self.ui.graphicsView_frontiere.plot(abscisses,ordonnees,symbolBrush=(brush[0],brush[1],brush[2]),pen=None,symbol='o'))
+    
+        cursor.close()
+        mydb.close()
+
+
+    # Méthode pour valider l'input de l'utilisateur. C'est la méthode associée au bouton "Valider"
+    
+
+    # Méthode associée au bouton "retour"
+    
+    def action_boutonRetour(self):
+        if (self.Parametres.numeroExperience>1):
+            self.closed.emit(paramPickle(self.Parametres.numeroExperience-1, "PROF",0))
+            # on émet le signal closed
+            self.close()
+#        self.ui.lineEdit_calculer_portefeuille.show()
+#        self.ui.lineEdit_voici_ton_portefeuille.hide()
+        
+    def action_boutonSuivant(self):
+        self.closed.emit(paramPickle(self.Parametres.numeroExperience+1,"PROF",0)) # on émet le signal closed
+        self.close()
+       
+
+        
+
+
+
+#if __name__ == '__main__':
+#    import sys
+#    app = QtWidgets.QApplication(sys.argv)
+#    window = MyWindow(parametres)
+#    window.show()
+#    sys.exit(app.exec_())
+
+

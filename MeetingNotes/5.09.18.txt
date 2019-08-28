@@ -1,0 +1,11 @@
+Ecrire des programmes compréhensibles: avec commentaires.
+Faire application avec un langage sur lequel Sri est d'accord et avec possibilité de collecter des informations.
+Commencer sans actif sans risque et sans vente à découvert.
+Faire varier les formes des courbes à montrer aux étudiants (covariance à faire varier notamment)
+Permettre d'afficher le gamma en faisant bouger le curseur.
+Après la réponse de l'étudiant, lui montrer le "vrai" portefeuille (c-à-d celui qu'on trouve avec la matrice avec laquelle on génère les données) vs le portefeuille calculé grâce à la covariance et à l'espérance estimés: lui faire sentir l'importance de l'estimation d'erreur.
+2ème projet: Jusqu'à quel point un humain peut-il détecter la corrélation.
+visualiser X(t) et Y(t) simultanément ou bien X(Y)?
+a priori toute corrélation >0.6 est détectable et <0.2 non détectable. 
+Quid entre 0.2 et 0.6?
+

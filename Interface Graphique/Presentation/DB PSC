@@ -1,0 +1,30 @@
+INSTALLER DATABASE LINUX :
+
+TOUT EN CONSOLE !!!
+
+sudo apt install mysql-client
+sudo apt install mysql-server
+
+sudo /etc/init.d/mysql restart
+
+sudo mysql_secure_installation + suivre instructions laisser le mot de passe root vide !!!
+
+sudo mysql -h localhost -u root -p + ENTREE
+
+CREATE DATABASE PSC_DONNEES;
+
+use PSC_DONNEES;
+
+create table data (id INT AUTO_INCREMENT,numPoste INT,nameUser char(20),numCourbe INT,gamma FLOAT,pdsRiskFree FLOAT,pds1 FLOAT,pds2 FLOAT,pds3 FLOAT,pds4 FLOAT,pds5 FLOAT,pds6 FLOAT,pds7 FLOAT,pds8 FLOAT,pds9 FLOAT,pds10 FLOAT,distance FLOAT,PRIMARY KEY (id));
+
+LOAD DATA LOCAL INFILE '/home/adrien/Téléchargements/download.csv' INTO TABLE data FIELDS TERMINATED BY ';' ENCLOSED BY '"' LINES TERMINATED BY '\n';
+
+update user set plugin='' where User='root';
+
+flush privileges;
+
+quit
+
+sudo apt install python3-mysqldb
+
+Lancer main.py de l'interface Prof

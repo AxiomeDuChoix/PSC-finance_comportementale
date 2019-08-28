@@ -1,0 +1,13 @@
+Session expérienceVm (élèves) :
+Experience$numéroMachine
+
+Session adminVm :
+Login : ExpPSC
+Mdp : PSC2018@
+
+MySQL server admin :
+Login : root
+Mdp : Hgb3des2
+
+MySQL élève:
+Mdp temporaire : 1234
